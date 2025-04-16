@@ -1,0 +1,41 @@
+% === Load LTspice Data ===
+data = tdfread('dataset1.txt');  % Ensure the file is in your working directory
+time = data.time;
+P_C = data.Pcap;
+P_R = data.Pres;
+
+% === Integration Durations in Seconds ===
+durations = [0.01, 0.06];   % 10ms and 60ms
+
+% === Intervals for Trapezoidal Rule ===
+intervals = [10, 100, 1000, 10000];
+
+% === Loop over durations and intervals ===
+for d = 1:length(durations)
+    t_start = 0;
+    t_end = durations(d);
+    fprintf('\n=== Energy Estimation using Trapezoidal Rule (0 to %.0f ms) ===\n', t_end*1000);
+
+    for k = 1:length(intervals)
+        n = intervals(k);
+
+        % Uniform time vector
+        t_uniform = linspace(t_start, t_end, n+1);
+
+        % Interpolated power values at uniform time points
+        P_C_interp = interp1(time, P_C, t_uniform, 'pchip');
+        P_R_interp = interp1(time, P_R, t_uniform, 'pchip');
+
+        % Step size
+        h = (t_end - t_start) / n;
+
+        % Trapezoidal Rule Integration (manual implementation)
+        E_C = h * (0.5 * P_C_interp(1) + sum(P_C_interp(2:end-1)) + 0.5 * P_C_interp(end));
+        E_R = h * (0.5 * P_R_interp(1) + sum(P_R_interp(2:end-1)) + 0.5 * P_R_interp(end));
+
+        % Display result
+        fprintf('n = %5d:  E_C = %.6f J,  E_R = %.6f J\n', n, E_C, E_R);
+    end
+end
+
+
