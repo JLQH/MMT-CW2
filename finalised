@@ -1,0 +1,77 @@
+clc;
+
+% === Load LTspice Data ===
+data = tdfread('dataset1.txt');  % Tab-delimited export
+time = data.time;
+P_C = data.Pcap;  % Capacitor instantaneous power (W)
+P_R = data.Pres;  % Resistor instantaneous power (W)
+
+% === Prompt for Method and Intervals ===
+rule_type = lower(input('Enter integration method ("simp" or "trap"): ', 's'));
+while ~ismember(rule_type, {'simp', 'trap'})
+    rule_type = lower(input('Invalid entry. Please enter "simp" or "trap": ', 's'));
+end
+
+n = input('Enter number of intervals (e.g., 10, 100, 1000, 10000): ');
+
+% === Durations in Seconds ===
+durations = [0.01, 0.06];  % 10ms and 60ms
+
+% === Loop Over Durations ===
+for d = 1:length(durations)
+    t_start = 0;
+    t_end = durations(d);
+    fprintf('\n--- %s Rule | Intervals: %d | Time: %.0f ms ---\n', ...
+            capitalize(rule_type), n, t_end * 1000);
+
+    % Adjust intervals for Simpson's Rule
+    n_intervals = n;
+    if strcmp(rule_type, 'simpson') && mod(n_intervals, 2) ~= 0
+        n_intervals = n_intervals + 1;
+        fprintf('(Adjusted to %d intervals for Simpson''s Rule)\n', n_intervals);
+    end
+
+    % Create uniform time vector
+    t_uniform = linspace(t_start, t_end, n_intervals + 1);
+
+    % Interpolate power to uniform time steps
+    P_C_interp = interp1(time, P_C, t_uniform, 'linear');
+    P_R_interp = interp1(time, P_R, t_uniform, 'linear');
+
+    % Step size
+    h = (t_end - t_start) / n_intervals;
+
+    % === Start timing ===
+    tic;
+
+    % === Compute Energy ===
+    switch rule_type
+        case 'trap'
+            E_C = h * (0.5 * P_C_interp(1) + sum(P_C_interp(2:end-1)) + 0.5 * P_C_interp(end));
+            E_R = h * (0.5 * P_R_interp(1) + sum(P_R_interp(2:end-1)) + 0.5 * P_R_interp(end));
+        case 'simp'
+            E_C = (h / 3) * (P_C_interp(1) + ...
+                4 * sum(P_C_interp(2:2:end-1)) + ...
+                2 * sum(P_C_interp(3:2:end-2)) + ...
+                P_C_interp(end));
+            E_R = (h / 3) * (P_R_interp(1) + ...
+                4 * sum(P_R_interp(2:2:end-1)) + ...
+                2 * sum(P_R_interp(3:2:end-2)) + ...
+                P_R_interp(end));
+    end
+
+    % === Stop timing ===
+    elapsed_time = toc;
+
+    % === Display Results ===
+    fprintf('Capacitor Energy: %.8f J\n', E_C);
+    fprintf('Resistor Energy:  %.8f J\n', E_R);
+    fprintf('Computation Time: %.6f seconds\n', elapsed_time);
+end
+
+% === Helper Function ===
+function out = capitalize(str)
+    out = lower(str);
+    out(1) = upper(out(1));
+end
+
