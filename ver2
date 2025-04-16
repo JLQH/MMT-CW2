@@ -1,0 +1,63 @@
+% === Load LTspice Data ===
+data = tdfread('dataset1.txt'); 
+time = data.time;
+P_C = data.Pcap;
+P_R = data.Pres;
+
+% === Integration Durations and Intervals ===
+durations = [0.01, 0.06];               % 10ms and 60ms in seconds
+intervals = [10, 100, 1000, 10000];     % Number of intervals
+n_intervals = length(intervals);
+n_durations = length(durations);
+
+% === Preallocate Result Matrices ===
+E_C_simpson = zeros(n_intervals, n_durations);
+E_R_simpson = zeros(n_intervals, n_durations);
+E_C_trap = zeros(n_intervals, n_durations);
+E_R_trap = zeros(n_intervals, n_durations);
+
+% === Loop Through Durations ===
+for d = 1:n_durations
+    t_start = 0;
+    t_end = durations(d);
+
+    for k = 1:n_intervals
+        n = intervals(k);
+        % Ensure even number of intervals for Simpson’s Rule
+        if mod(n, 2) == 1
+            n = n + 1;
+        end
+
+        % Create Uniform Time Vector
+        t_uniform = linspace(t_start, t_end, n+1);
+        % Interpolate LTspice Data to Uniform Time Grid
+        P_C_interp = interp1(time, P_C, t_uniform, 'pchip');
+        P_R_interp = interp1(time, P_R, t_uniform, 'pchip');
+
+        % === Trapezoidal Rule ===
+        h = (t_end - t_start) / n;
+        E_C_trap(k, d) = h * (0.5 * P_C_interp(1) + sum(P_C_interp(2:end-1)) + 0.5 * P_C_interp(end));
+        E_R_trap(k, d) = h * (0.5 * P_R_interp(1) + sum(P_R_interp(2:end-1)) + 0.5 * P_R_interp(end));
+
+        % === Simpson's Rule ===
+        E_C_simpson(k, d) = (h/3) * (P_C_interp(1) + 4*sum(P_C_interp(2:2:end-1)) + 2*sum(P_C_interp(3:2:end-2)) + P_C_interp(end));
+        E_R_simpson(k, d) = (h/3) * (P_R_interp(1) + 4*sum(P_R_interp(2:2:end-1)) + 2*sum(P_R_interp(3:2:end-2)) + P_R_interp(end));
+    end
+end
+
+% === Display Results as Tables ===
+rowNames = string(intervals);
+colNames = {'10ms', '60ms'};
+
+fprintf('\n--- Capacitor Energy (Simpson) ---\n');
+disp(array2table(E_C_simpson, 'RowNames', rowNames, 'VariableNames', colNames));
+
+fprintf('\n--- Capacitor Energy (Trapezoidal) ---\n');
+disp(array2table(E_C_trap, 'RowNames', rowNames, 'VariableNames', colNames));
+
+fprintf('\n--- Resistor Energy (Simpson) ---\n');
+disp(array2table(E_R_simpson, 'RowNames', rowNames, 'VariableNames', colNames));
+
+fprintf('\n--- Resistor Energy (Trapezoidal) ---\n');
+disp(array2table(E_R_trap, 'RowNames', rowNames, 'VariableNames', colNames));
+
